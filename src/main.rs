@@ -1,20 +1,22 @@
-use axum::{
-    http::{HeaderMap, HeaderValue, StatusCode},
-    response::{IntoResponse, Response},
-    Router,
-    routing::{get},
-};
+use axum::{http::{HeaderMap, HeaderValue, StatusCode}, response::{IntoResponse, Response}, Router, routing::{get}};
+use axum::extract::Query;
 use tokio::{
     fs::File,
     io::AsyncReadExt,
 };
+use serde::Deserialize;
 
+#[derive(Deserialize, Debug)]
+struct Video {
+    v: String,
+    fmt: i32,
+}
 
 #[tokio::main]
 async fn main() {
     let app = Router::new()
         .route("/", get(|| async {"Hello, Axum"}))
-        .route("/video", get(video_sample))
+        .route("/watch", get(video_sample))
         .route("/dash/manifest.mpd", get(get_dash_manifest))
         .route("/dash/:segment", get(get_dash_segment));
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
@@ -37,8 +39,10 @@ async fn video_sample() -> Result<Response, StatusCode> {
     Ok((headers, buffer).into_response())
 }
 
-async fn get_dash_manifest() -> Result<Response, StatusCode> {
-    let file_path = "video/manifest.mpd";
+async fn get_dash_manifest(Query(params): Query<Video>) -> Result<Response, StatusCode> {
+    let video_name = &params.v;
+    let fmt = &params.fmt;
+    let file_path = format!("video/{video_name}_manifest_{fmt}p.mpd");
     let mut file = match File::open(&file_path).await {
         Ok(file) => file,
         Err(_) => return Err(StatusCode::NOT_FOUND),
